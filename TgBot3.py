@@ -157,6 +157,20 @@ def load_bottocen_from_file():
     data = safe_json_read(DATA_FILE)
     return data.get("bot_token", "")
 
+
+def load_allusers_tem_id_from_file():
+    """Завантаження ID теми для всіх користувачів"""
+    data = safe_json_read(DATA_FILE)
+    return data.get("allusers_tem_id", 386)  # Значення за замовчуванням 386
+
+def load_cave_chat_id_from_file():
+    """Завантаження ID печерного чату"""
+    data = safe_json_read(DATA_FILE)
+    return data.get("cave_chat_id", -1002648725095)  # Значення за замовчуванням -1002648725095
+
+
+
+
 def is_programmer(username):
     """Перевірка, чи є користувач програмістом"""
     data = safe_json_read(DATA_FILE)
@@ -172,7 +186,10 @@ def is_admin(username):
 DATA_FILE = "data.json"
 application = None
 app = Flask(__name__)
-CREATOR_CHAT_ID = load_chat_id_from_file()
+CREATOR_CHAT_ID = load_chat_id_from_file()  # ID чату для адміністраторів
+ALLUSERS_TEM_ID=load_allusers_tem_id_from_file()
+CAVE_CHAT_ID= load_cave_chat_id_from_file()
+
 
 BOTTOCEN = load_bottocen_from_file()
 
@@ -252,7 +269,7 @@ async def export_to_excel():
                 df.loc[:, "mute/ban_end"] = df["mute/ban_end"].apply(
                     lambda x: x if "Навсегда" in str(x) else
                     (datetime.strptime(x.replace(";", " "), "%H:%M %d/%m/%Y").strftime("%H:%M; %d/%m/%Y")
-                    if isinstance(x, str) and x != "Навсегда" else "")
+                     if isinstance(x, str) and x != "Навсегда" else "")
                 )
             if "join_date" in df.columns:
                 df.loc[:, "join_date"] = df["join_date"].apply(
@@ -280,10 +297,14 @@ async def export_to_excel():
                 writer, index=False, sheet_name="Admins")
             pd.DataFrame(data.get("programmers", []), columns=["Programmers"]).to_excel(
                 writer, index=False, sheet_name="Programmers")
+
+            # Обновленный GeneralInfo с новыми полями в нужном порядке
             pd.DataFrame([{
                 "bot_token": data.get("bot_token", ""),
                 "owner_id": data.get("owner_id", ""),
                 "chat_id": data.get("chat_id", ""),
+                "cave_chat_id": data.get("cave_chat_id", "-1002648725095"),  # Строка по умолчанию
+                "allusers_tem_id": data.get("allusers_tem_id", 386),  # Число по умолчанию
                 "total_score": data.get("total_score", 0),
                 "num_of_ratings": data.get("num_of_ratings", 0)
             }]).to_excel(writer, index=False, sheet_name="GeneralInfo")
@@ -359,6 +380,8 @@ async def import_from_excel(file_path):
             "bot_token": data.get("bot_token", ""),
             "owner_id": data.get("owner_id", ""),
             "chat_id": data.get("chat_id", ""),
+            "cave_chat_id": data.get("cave_chat_id", "-1002648725095"),  # Строка по умолчанию
+            "allusers_tem_id": data.get("allusers_tem_id", 386),  # Число по умолчанию
             "total_score": data.get("total_score", 0),
             "num_of_ratings": data.get("num_of_ratings", 0),
             "sent_messages": {},
@@ -368,22 +391,27 @@ async def import_from_excel(file_path):
 
         wb = load_workbook(file_path)
 
+        # Обновленный блок для чтения GeneralInfo с новыми полями в нужном порядке
         if "GeneralInfo" in wb.sheetnames:
             ws = wb["GeneralInfo"]
             headers = [cell.value for cell in ws[1]] if len(ws[1]) > 0 else []
 
             for row in ws.iter_rows(min_row=2, values_only=True):
-                if row and len(row) >= 5:
+                if row and len(row) >= 7:
                     if len(headers) >= 1 and row[0]:
                         new_data["bot_token"] = str(row[0])
                     if len(headers) >= 2 and row[1]:
                         new_data["owner_id"] = str(row[1])
                     if len(headers) >= 3 and row[2]:
                         new_data["chat_id"] = str(row[2])
-                    if len(headers) >= 4 and row[3] is not None:
-                        new_data["total_score"] = float(row[3])
+                    if len(headers) >= 4 and row[3]:
+                        new_data["cave_chat_id"] = str(row[3])  # Сохраняем как строку
                     if len(headers) >= 5 and row[4] is not None:
-                        new_data["num_of_ratings"] = int(row[4])
+                        new_data["allusers_tem_id"] = int(row[4])  # Сохраняем как число
+                    if len(headers) >= 6 and row[5] is not None:
+                        new_data["total_score"] = float(row[5])
+                    if len(headers) >= 7 and row[6] is not None:
+                        new_data["num_of_ratings"] = int(row[6])
 
         if "BannedUsers" in wb.sheetnames:
             ws = wb["BannedUsers"]
@@ -459,11 +487,14 @@ async def import_from_excel(file_path):
 
 async def auto_delete_message(bot, chat_id, message_id, delay):
     """Автоматичне видалення повідомлення через заданий час"""
-    await asyncio.sleep(delay)
     try:
+        await asyncio.sleep(delay)
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
-    except:
-        pass
+    except telegram.error.BadRequest as e:
+        if "message to delete not found" not in str(e):
+            print(f"Error deleting message: {e}")
+    except Exception as e:
+        print(f"Unexpected error deleting message: {e}")
 
 # ОСНОВНІ КОМАНДИ БОТА
 async def start(update: Update, context):
@@ -497,6 +528,14 @@ async def start(update: Update, context):
             }
             config["users"].append(new_user)
             safe_json_write(config, DATA_FILE)
+
+            # Создаём тему для нового пользователя
+            topic_id = await get_or_create_topic(context, user.id, user.first_name)
+            if topic_id:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"Дякую за те що завітали в Supp0rtsBot!"
+                )
 
         keyboard = [
             ["/start", "/rate"],
@@ -1362,9 +1401,6 @@ async def set_alllist(update: Update, context: CallbackContext) -> None:
     """Обробка команди /set_alllist - імпорт даних з Excel файлу"""
     try:
         user = update.message.from_user.username
-        if not is_programmer(user) and not is_admin(user):
-            await update.message.reply_text("Ця команда доступна тільки адміністраторам.")
-            return
 
         await update.message.reply_text("Будь ласка, надішліть Excel-файл з даними.")
         context.user_data["awaiting_file"] = True
@@ -1421,7 +1457,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 return
 
-        if update.message.chat.id == int(data["chat_id"]) and update.message.message_thread_id is None:
+        if update.message.message_thread_id == ALLUSERS_TEM_ID and is_programmer(update.message.from_user.username):
             user = update.message.from_user.username
             if is_programmer(user) or is_admin(user):
                 success_count = 0
@@ -1515,6 +1551,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode='HTML'
                 )
                 return
+
+        if update.message.chat.id == int(data["chat_id"]) and update.message.message_thread_id is None:
+            return
 
         if str(update.message.chat.id) != str(data["chat_id"]):
             user_id = update.message.from_user.id
@@ -1691,7 +1730,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             video_note=update.message.video_note.file_id
                         )
 
-                    await update.message.reply_text("Повідомлення відправлено користувачу")
+                    sent_msg = await update.message.reply_text("Повідомлення відправлено користувачу")
+                    asyncio.create_task(auto_delete_message(context.bot, chat_id=sent_msg.chat.id, message_id=sent_msg.message_id, delay=5))
                 except Exception as e:
                     await update.message.reply_text(f"Помилка при відправці: {str(e)}")
             return
@@ -1757,37 +1797,105 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"Помилка в handle_message: {str(e)}")
 
+
 async def get_or_create_topic(context: ContextTypes.DEFAULT_TYPE, user_id: int, first_name: str):
-    """Створення або отримання теми для користувача"""
+    """Створення або отримання теми для користувача з обробкою блокувань"""
+    print(f"Attempting to get/create topic for user {user_id} ({first_name})")
     try:
         data = safe_json_read(DATA_FILE)
         chat_id = int(data["chat_id"])
         topics = data.get("topics", {})
         user_topics = data.get("user_topics", {})
 
+        print(f"Existing topics: {topics}")
+        print(f"User topics: {user_topics}")
+
+        # Проверяем, есть ли тема в нашем словаре
         if str(user_id) in topics:
-            return topics[str(user_id)]
+            topic_id = topics[str(user_id)]
+            print(f"Found existing topic {topic_id} for user {user_id}")
+            return topic_id
 
-        topic_name = f"{first_name} ({user_id})"
-        forum_topic = await context.bot.create_forum_topic(
-            chat_id=chat_id,
-            name=topic_name
-        )
-        topic_id = forum_topic.message_thread_id
+        # Проверяем, не заблокировал ли пользователь бота
+        try:
+            await context.bot.send_chat_action(
+                chat_id=user_id,
+                action=telegram.constants.ChatAction.TYPING
+            )
+        except telegram.error.Forbidden as e:
+            if "bot was blocked by the user" in str(e):
+                print(f"User {user_id} blocked the bot")
+                return None
+            raise
 
-        topics[str(user_id)] = topic_id
-        user_topics[str(topic_id)] = str(user_id)
+        # Создаем новую тему
+        try:
+            topic_name = f"{first_name} ({user_id})"
+            print(f"Creating new topic with name: {topic_name}")
 
-        data["topics"] = topics
-        data["user_topics"] = user_topics
-        safe_json_write(data, DATA_FILE)
+            forum_topic = await context.bot.create_forum_topic(
+                chat_id=chat_id,
+                name=topic_name[:128]  # Обмеження Telegram на довжину назви
+            )
+            topic_id = forum_topic.message_thread_id
+            print(f"Successfully created topic {topic_id}")
 
-        return topic_id
-    except telegram.error.TelegramError as e:
-        print(f"Помилка створення теми: {e}")
-        return None
+            # Получаем информацию о пользователе
+            try:
+                user_info = await context.bot.get_chat(user_id)
+                username = user_info.username or "немає username"
+                full_name = user_info.full_name or first_name
+            except Exception as e:
+                print(f"Error getting user info: {e}")
+                username = "немає username"
+                full_name = first_name
+
+            # Формируем информационное сообщение
+            info_message = (
+                f"📌 Інформація про користувача:\n"
+                f"👤 Ім'я: {full_name}\n"
+                f"🔗 Юзернейм: @{username}\n"
+                f"🆔 ID: {user_id}\n"
+                f"🗂 ID теми: {topic_id}"
+            )
+
+            # Отправляем и закрепляем сообщение
+            try:
+                msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    message_thread_id=topic_id,
+                    text=info_message
+                )
+                await context.bot.pin_chat_message(
+                    chat_id=chat_id,
+                    message_id=msg.message_id
+                )
+                print(f"Pinned info message in topic {topic_id}")
+            except Exception as e:
+                print(f"Error pinning message: {e}")
+
+            # Обновляем данные
+            topics[str(user_id)] = topic_id
+            user_topics[str(topic_id)] = str(user_id)
+            data["topics"] = topics
+            data["user_topics"] = user_topics
+
+            if not safe_json_write(data, DATA_FILE):
+                print("Failed to save data to JSON file")
+            else:
+                print("Successfully updated topic data")
+
+            return topic_id
+
+        except telegram.error.BadRequest as e:
+            print(f"Telegram BadRequest while creating topic: {e}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error while creating topic: {e}")
+            return None
+
     except Exception as e:
-        print(f"Помилка в get_or_create_topic: {e}")
+        print(f"Critical error in get_or_create_topic: {e}")
         return None
 
 # НАЛАШТУВАННЯ КОМАНД БОТА
@@ -1834,7 +1942,7 @@ async def set_save_commands(application):
         BotCommand("get_logs", "Отримати логи"),
         BotCommand("help", "Показати доступні команди"),
     ]
-    await application.bot.set_my_commands(commands, scope=BotCommandScopeChat(chat_id=CREATOR_CHAT_ID))
+    await application.bot.set_my_commands(commands, scope=BotCommandScopeChat(chat_id=CAVE_CHAT_ID))
 
 async def send_user_list():
     """Автоматична відправка Excel файлу з користувачами"""
@@ -1845,7 +1953,7 @@ async def send_user_list():
             with open(excel_filename, "rb") as file:
                 filename_to_send = os.path.basename(excel_filename)
                 await bot.send_document(
-                    chat_id=CREATOR_CHAT_ID,
+                    chat_id=CAVE_CHAT_ID,
                     document=file,
                     filename=filename_to_send
                 )
@@ -1857,7 +1965,7 @@ async def send_user_list():
         print(f"Помилка при відправці списку користувачів: {e}")
         try:
             bot = Bot(token=BOTTOCEN)
-            await bot.send_message(chat_id=CREATOR_CHAT_ID, text=f"Помилка при створенні звіту: {e}")
+            await bot.send_message(chat_id=CAVE_CHAT_ID, text=f"Помилка при створенні звіту: {e}")
         except:
             pass
 
