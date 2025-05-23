@@ -548,7 +548,7 @@ async def start(update: Update, context):
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
         await update.message.reply_text(
-            "👋1 Привіт! Я ваш бот підтримки. \n"
+            "👋2 Привіт! Я ваш бот підтримки. \n"
             "📝 Введіть команду /rate для оцінки бота, \n"
             "✉️ /message для написання адміністраторам \n"
             "❓ або /help для допомоги.",
@@ -2013,6 +2013,6 @@ async def main():
         print(f"Помилка в main: {e}")
 
 if __name__ == "__main__":
-    """flask_thread = threading.Thread(target=run_flask)
+    flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
-    asyncio.run(main())"""
+    asyncio.run(main())
