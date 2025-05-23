@@ -2013,6 +2013,7 @@ async def main():
         print(f"Помилка в main: {e}")
 
 if __name__ == "__main__":
+    з
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
     asyncio.run(main())
