@@ -546,7 +546,10 @@ async def start(update: Update, context):
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
         await update.message.reply_text(
-            "Привіт! Я ваш бот підтримки. Введіть команду /rate для оцінки бота, /message для написання адміністраторам або /help для допомоги.",
+            "👋 Привіт! Я ваш бот підтримки. \n"
+            "📝 Введіть команду /rate для оцінки бота, \n"
+            "✉️ /message для написання адміністраторам \n"
+            "❓ або /help для допомоги.",
             reply_markup=reply_markup
         )
     except Exception as e:
@@ -569,7 +572,7 @@ async def rate(update: Update, context):
         num_of_ratings = data.get("num_of_ratings", 0)
         average_rating = total_score / num_of_ratings if num_of_ratings > 0 else 0
 
-        rating_text = f"Загальна оцінка: {round(average_rating, 1)}⭐️\nВаш попередній відгук: {user_rating}⭐️" if user_rating else f"Загальна оцінка: {round(average_rating, 1)}⭐️"
+        rating_text = f"🌟 Загальна оцінка: {round(average_rating, 1)}⭐️\nВаш попередній відгук: {user_rating}⭐️" if user_rating else f"🌟 Загальна оцінка: {round(average_rating, 1)}⭐️"
 
         keyboard = [
             [InlineKeyboardButton("0.5⭐️", callback_data='0.5'), InlineKeyboardButton("1⭐️", callback_data='1')],
@@ -633,7 +636,8 @@ async def button_callback(update: Update, context):
 
         average_rating = total_score / num_of_ratings if num_of_ratings > 0 else 0
         await query.edit_message_text(
-            f"Дякуємо за ваш відгук! Ваша оцінка: {new_rating}⭐️\nЗагальна оцінка: {round(average_rating, 1)}⭐️"
+            f"🙏 Дякуємо за ваш відгук! Ваша оцінка: {new_rating}⭐️\n"
+            f"🌟 Загальна оцінка: {round(average_rating, 1)}⭐️"
         )
     except Exception as e:
         print(f"Помилка в button_callback: {e}")
@@ -655,8 +659,8 @@ async def message(update: Update, context):
 
         context.user_data['waiting_for_message'] = True
         reply = await update.message.reply_text(
-            "Введіть ваше повідомлення, і його буде відправлено адміністраторам бота. "
-            "Введіть /stopmessage, щоб завершити введення повідомлень."
+            "📩 Введіть ваше повідомлення, і його буде відправлено адміністраторам бота. \n"
+            "🚫 Введіть /stopmessage, щоб завершити введення повідомлень."
         )
         await asyncio.create_task(
             auto_delete_message(context.bot, chat_id=reply.chat.id, message_id=reply.message_id, delay=5))
@@ -668,7 +672,7 @@ async def stopmessage(update: Update, context):
     """Обробка команди /stopmessage - завершення введення повідомлень"""
     try:
         if context.user_data.get('waiting_for_message'):
-            reply = await update.message.reply_text("Ви завершили введення повідомлень.")
+            reply = await update.message.reply_text("✅ Ви завершили введення повідомлень.")
             context.user_data['waiting_for_message'] = False
             await asyncio.create_task(
                 auto_delete_message(context.bot, chat_id=reply.chat.id, message_id=reply.message_id, delay=5))
@@ -701,13 +705,13 @@ async def help(update: Update, context):
             )
         else:
             help_text = (
-                "Доступні команди в боті:\n"
-                "/start - Запустити бота.\n"
-                "/rate - Залишити відгук.\n"
-                "/message - Почати введення повідомлень адміністраторам.\n"
-                "/stopmessage - Завершити введення повідомлень.\n"
-                "/fromus - Інформація про створювача.\n"
-                "/help - Показати доступні команди.\n"
+                "ℹ️ Доступні команди в боті:\n"
+                "🚀 /start - Запустити бота\n"
+                "⭐️ /rate - Залишити відгук\n"
+                "✉️ /message - Почати введення повідомлень адміністраторам\n"
+                "🚫 /stopmessage - Завершити введення повідомлень\n"
+                "👨‍💻 /fromus - Інформація про створювача\n"
+                "❓ /help - Показати доступні команди"
             )
 
         await update.message.reply_text(help_text)
@@ -719,9 +723,10 @@ async def fromus(update: Update, context):
     """Обробка команди /fromus - інформація про творця"""
     try:
         await update.message.reply_text(
-            "*Skeleton* Написав бота\nПортфоліо: ```https://www.linkedin.com/in/artem-k-972a41344/```\n"
-            "Телеграм канал з усіма проєктами: ```https://t.me/AboutMyProjects```\n"
-            "По всім питанням пишіть в цього бота",
+            "👨‍💻 *Skeleton* Написав бота\n"
+            "📂 Портфоліо: ```https://www.linkedin.com/in/artem-k-972a41344/```\n"
+            "📢 Телеграм канал з усіма проєктами: ```https://t.me/AboutMyProjects```\n"
+            "❓ По всім питанням пишіть в цього бота",
             parse_mode="MarkdownV2"
         )
     except Exception as e:
@@ -738,7 +743,7 @@ async def info(update: Update, context: CallbackContext):
         programmer_list = "\n".join(programmers) if programmers else "Список програмістів пустий."
         admin_list = "\n".join(admins) if admins else "Список адміністраторів пустий."
 
-        await update.message.reply_text(f"Програмісти:\n{programmer_list}\n\nАдміністратори:\n{admin_list}")
+        await update.message.reply_text(f"👨‍💻 Програмісти:\n{programmer_list}\n\n👮 Адміністратори:\n{admin_list}")
     except Exception as e:
         print(f"Помилка в info: {e}")
         await update.message.reply_text("Сталася помилка при обробці команди.")
@@ -825,7 +830,9 @@ async def mute(update: Update, context: CallbackContext):
         try:
             await context.bot.send_message(
                 chat_id=int(user_id),
-                text=f"🔇 Вас замутили на {mute_time} секунд\nПричина: {reason}\nМут закінчиться: {mute_end}"
+                text=f"🔇 Вас замутили на {mute_time} секунд\n"
+                     f"📌 Причина: {reason}\n"
+                     f"⏳ Мут закінчиться: {mute_end}"
             )
         except Exception as e:
             print(f"Помилка сповіщення про мут: {e}")
@@ -971,7 +978,8 @@ async def ban(update: Update, context: CallbackContext):
         try:
             await context.bot.send_message(
                 chat_id=int(user_id),
-                text=f"🚫 Вас забанено назавжди\nПричина: {reason}"
+                text=f"🚫 Вас забанено назавжди\n"
+                     f"📌 Причина: {reason}"
             )
         except Exception as e:
             print(f"Помилка сповіщення користувача про бан: {e}")
@@ -1151,7 +1159,7 @@ async def admin(update: Update, context: CallbackContext):
         else:
             data["admins"].append(username)
             safe_json_write(data, DATA_FILE)
-            await update.message.reply_text(f"Користувач @{username} доданий до списку адміністраторів.")
+            await update.message.reply_text(f"👮 Користувач @{username} доданий до списку адміністраторів.")
     except Exception as e:
         print(f"Помилка в admin: {e}")
         await update.message.reply_text("Сталася помилка при обробці команди.")
@@ -1174,7 +1182,7 @@ async def deleteadmin(update: Update, context: CallbackContext):
         if username in data["admins"]:
             data["admins"].remove(username)
             safe_json_write(data, DATA_FILE)
-            await update.message.reply_text(f"Користувач @{username} видалений зі списку адміністраторів.")
+            await update.message.reply_text(f"👮 Користувач @{username} видалений зі списку адміністраторів.")
         else:
             await update.message.reply_text(f"Користувач @{username} не знайдений.")
     except Exception as e:
@@ -1201,7 +1209,7 @@ async def programier(update: Update, context: CallbackContext):
         else:
             data["programmers"].append(username)
             safe_json_write(data, DATA_FILE)
-            await update.message.reply_text(f"Користувач @{username} доданий до списку програмістів.")
+            await update.message.reply_text(f"👨‍💻 Користувач @{username} доданий до списку програмістів.")
     except Exception as e:
         print(f"Помилка в programier: {e}")
         await update.message.reply_text("Сталася помилка при обробці команди.")
@@ -1226,7 +1234,7 @@ async def deleteprogramier(update: Update, context: CallbackContext):
         elif username in data["programmers"]:
             data["programmers"].remove(username)
             safe_json_write(data, DATA_FILE)
-            await update.message.reply_text(f"Користувач @{username} видалений зі списку програмістів.")
+            await update.message.reply_text(f"👨‍💻 Користувач @{username} видалений зі списку програмістів.")
         else:
             await update.message.reply_text(f"Користувач @{username} не є програмістом.")
     except Exception as e:
@@ -1541,9 +1549,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 report_message = (
                     f"📊 <b>Результат розсилки:</b>\n"
-                    f"• Відправлено: {success_count}\n"
-                    f"• Не вдалося: {fail_count}\n"
-                    f"• Усього користувачів: {len(data.get('users', []))}"
+                    f"• ✅ Відправлено: {success_count}\n"
+                    f"• ❌ Не вдалося: {fail_count}\n"
+                    f"• 👥 Усього користувачів: {len(data.get('users', []))}"
                 )
 
                 await update.message.reply_text(
@@ -1578,8 +1586,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 topic_id = await get_or_create_topic(context, user_id, user_name)
 
                 if topic_id:
-                    base_message = f'Повідомлення від **{escape_markdown(user_name)}**; `@{escape_markdown(user_username)}` `{user_id}`\n{escape_markdown(current_time)}:'
-
+                    base_message = f'📩 Повідомлення від **{escape_markdown(user_name)}**; `@{escape_markdown(user_username)}` `{user_id}`\n⏰ {escape_markdown(current_time)}:'
                     if update.message.text:
                         message_text = f'{base_message}\n{escape_markdown(update.message.text)}'
                         msg = await context.bot.send_message(
@@ -1673,7 +1680,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         )
                         save_sent_messages(sent_messages)
 
-                    reply = await update.message.reply_text("Ваше повідомлення надіслано адміністраторам бота.")
+                    reply = await update.message.reply_text("✅ Ваше повідомлення надіслано адміністраторам бота.")
                     await asyncio.create_task(
                         auto_delete_message(context.bot, chat_id=reply.chat.id, message_id=reply.message_id, delay=5))
             else:
@@ -1800,20 +1807,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_or_create_topic(context: ContextTypes.DEFAULT_TYPE, user_id: int, first_name: str):
     """Створення або отримання теми для користувача з обробкою блокувань"""
-    print(f"Attempting to get/create topic for user {user_id} ({first_name})")
     try:
         data = safe_json_read(DATA_FILE)
         chat_id = int(data["chat_id"])
         topics = data.get("topics", {})
         user_topics = data.get("user_topics", {})
 
-        print(f"Existing topics: {topics}")
-        print(f"User topics: {user_topics}")
-
         # Проверяем, есть ли тема в нашем словаре
         if str(user_id) in topics:
             topic_id = topics[str(user_id)]
-            print(f"Found existing topic {topic_id} for user {user_id}")
             return topic_id
 
         # Проверяем, не заблокировал ли пользователь бота
@@ -1828,19 +1830,17 @@ async def get_or_create_topic(context: ContextTypes.DEFAULT_TYPE, user_id: int, 
                 return None
             raise
 
-        # Создаем новую тему
+        # Створюємо нову тему
         try:
             topic_name = f"{first_name} ({user_id})"
             print(f"Creating new topic with name: {topic_name}")
 
             forum_topic = await context.bot.create_forum_topic(
                 chat_id=chat_id,
-                name=topic_name[:128]  # Обмеження Telegram на довжину назви
+                name=topic_name[:128]
             )
             topic_id = forum_topic.message_thread_id
-            print(f"Successfully created topic {topic_id}")
 
-            # Получаем информацию о пользователе
             try:
                 user_info = await context.bot.get_chat(user_id)
                 username = user_info.username or "немає username"
@@ -1850,7 +1850,6 @@ async def get_or_create_topic(context: ContextTypes.DEFAULT_TYPE, user_id: int, 
                 username = "немає username"
                 full_name = first_name
 
-            # Формируем информационное сообщение
             info_message = (
                 f"📌 Інформація про користувача:\n"
                 f"👤 Ім'я: {full_name}\n"
@@ -1859,7 +1858,6 @@ async def get_or_create_topic(context: ContextTypes.DEFAULT_TYPE, user_id: int, 
                 f"🗂 ID теми: {topic_id}"
             )
 
-            # Отправляем и закрепляем сообщение
             try:
                 msg = await context.bot.send_message(
                     chat_id=chat_id,
