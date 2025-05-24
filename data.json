@@ -15,8 +15,9 @@
             "first_name": "tokyo",
             "join_date": "11:31; 19/05/2025",
             "rating": 0,
-            "mute": false,
-            "mute_end": null
+            "mute": true,
+            "mute_end": "21:39; 03/03/2659",
+            "reason": "За рішенням адміністрації"
         },
         {
             "id": "7409942168",
@@ -69,6 +70,10 @@
         "5708855619": {
             "expiration": "Назавжди",
             "reason": "Забанен: За рішенням адміністрації"
+        },
+        "6222116355": {
+            "expiration": "21:39; 03/03/2659",
+            "reason": "За рішенням адміністрації"
         }
     },
     "banned_users": {
@@ -83,7 +88,7 @@
     "programmers": [
         "ArtemKirss"
     ],
-    "bot_token": "7651661492:AAFoSaap2cqR42EJTGWcAet3AHjFxnZzGQk",
+    "bot_token": "7651661492:AAGid0Ylm2tIMxeLC07Dm2ew6jR9DsoEGoY",
     "owner_id": "1840233118",
     "chat_id": "-1002558368408",
     "cave_chat_id": "-1002648725095",

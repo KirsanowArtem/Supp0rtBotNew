@@ -17,6 +17,13 @@ from flask import Flask
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Border, Side, PatternFill
 from apscheduler.schedulers.background import BackgroundScheduler
+import os
+import logging
+from datetime import datetime
+import pandas as pd
+from openpyxl.styles import PatternFill
+from telegram import Update
+from telegram.ext import CallbackContext
 
 nest_asyncio.apply()
 
@@ -201,7 +208,7 @@ def run_flask():
 
 # ФУНКЦІЇ ДЛЯ РОБОТИ З EXCEL
 async def export_to_excel():
-    """Експорт даних у Excel файл з покращеним форматуванням"""
+    """Експорт даних у Excel файл з покращеною обробкою помилок та кольоровим форматуванням"""
     try:
         data = safe_json_read(DATA_FILE)
         current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -209,39 +216,33 @@ async def export_to_excel():
 
         # Створюємо DataFrame для всіх користувачів
         all_users_df = pd.DataFrame(data["users"])
-        banned_ids = set(data["banned_users"].keys())
+        banned_ids = set(str(uid) for uid in data["banned_users"].keys())
+        admin_ids = set(str(admin) for admin in data.get("admins", []))
+        programmer_ids = set(str(prog) for prog in data.get("programmers", []))
 
-        # Перейменовуємо колонки для єдності
+        # Перейменовуємо колонки
         all_users_df = all_users_df.rename(columns={
             'mute': 'mute/ban',
             'mute_end': 'mute/ban_end'
         })
 
         # Позначаємо забанених користувачів
+        all_users_df['id'] = all_users_df['id'].astype(str)
         for user_id in banned_ids:
             mask = all_users_df['id'] == user_id
             all_users_df.loc[mask, 'mute/ban'] = True
             all_users_df.loc[mask, 'mute/ban_end'] = "Назавжди (бан)"
 
-        # Створюємо окремі DataFrame для різних категорій користувачів
+        # Створюємо окремі DataFrame
         users_df = all_users_df[all_users_df["mute/ban"] == False].copy()
         muted_df = all_users_df[(all_users_df["mute/ban"] == True) & (~all_users_df['id'].isin(banned_ids))].copy()
 
-        # Створюємо DataFrame для забанених користувачів з шапкою
-        banned_users_info = []
-        # Додаємо шапку
-        banned_users_info.append({
-            "id": "ID користувача",
-            "username": "Username",
-            "first_name": "Ім'я",
-            "join_date": "Дата приєднання",
-            "rating": "Рейтинг",
-            "mute/ban": "Статус бана",
-            "mute/ban_end": "Термін бана",
-            "reason": "Причина"
-        })
+        # Створюємо DataFrame для забанених користувачів
+        banned_columns = ["id", "username", "first_name", "join_date", "rating", "mute/ban", "mute/ban_end", "reason"]
+        banned_data = []
 
         for user_id, ban_info in data["banned_users"].items():
+            user_id = str(user_id)
             user_data = all_users_df[all_users_df["id"] == user_id].iloc[0].to_dict() if not all_users_df[
                 all_users_df["id"] == user_id].empty else {
                 "username": "Невідомо",
@@ -251,8 +252,7 @@ async def export_to_excel():
                 "mute/ban": True,
                 "mute/ban_end": "Назавжди (бан)"
             }
-
-            banned_users_info.append({
+            banned_data.append({
                 "id": user_id,
                 "username": user_data.get("username", "Невідомо"),
                 "first_name": user_data.get("first_name", "Невідомо"),
@@ -263,9 +263,9 @@ async def export_to_excel():
                 "reason": ban_info.get("reason", "Забанений")
             })
 
-        banned_df = pd.DataFrame(banned_users_info)
+        banned_df = pd.DataFrame(banned_data, columns=banned_columns)
 
-        # Інші DataFrame (topics, user_topics, sent_messages)
+        # Інші DataFrame
         topics_df = pd.DataFrame({
             "user_id": list(data.get("topics", {}).keys()),
             "topic_id": list(data.get("topics", {}).values())
@@ -276,92 +276,119 @@ async def export_to_excel():
             "user_id": list(data.get("user_topics", {}).values())
         })
 
-        # Виправлений формат sent_messages - всі значення мають бути рядками
         sent_messages = {str(k): str(v) for k, v in data.get("sent_messages", {}).items()}
         sent_messages_df = pd.DataFrame({
             "message_id": list(sent_messages.keys()),
             "user_id": list(sent_messages.values())
         })
 
-        # Функція для обробки дат
-        def process_dates(df):
-            if "mute/ban_end" in df.columns:
-                df.loc[:, "mute/ban_end"] = df["mute/ban_end"].apply(
-                    lambda x: x if "Назавжди" in str(x) else
-                    (datetime.strptime(x.replace(";", " "), "%H:%M %d/%m/%Y").strftime("%H:%M; %d/%m/%Y")
-                     if isinstance(x, str) and x != "Назавжди" else "")
-                )
-            if "join_date" in df.columns:
-                df.loc[:, "join_date"] = df["join_date"].apply(
-                    lambda x: datetime.strptime(x.replace(";", " "), "%H:%M %d/%m/%Y").strftime("%H:%M; %d/%m/%Y")
-                    if isinstance(x, str) else ""
-                )
-            return df
+        # Покращена обробка дат
+        def safe_date_parse(date_str):
+            try:
+                if not date_str or "Назавжди" in str(date_str):
+                    return date_str
+                clean_str = date_str.replace(";", "").strip()
+                return datetime.strptime(clean_str, "%H:%M %d/%m/%Y").strftime("%H:%M; %d/%m/%Y")
+            except ValueError as e:
+                logging.error(f"Помилка формату дати '{date_str}': {str(e)}")
+                return "Невірний формат"
 
-        # Обробляємо дати у всіх DataFrame
-        all_users_df = process_dates(all_users_df)
-        users_df = process_dates(users_df)
-        muted_df = process_dates(muted_df)
-        banned_df = process_dates(banned_df)
+        # Обробка дат
+        date_columns = ["mute/ban_end", "join_date"]
+        for df in [all_users_df, users_df, muted_df, banned_df]:
+            for col in date_columns:
+                if col in df.columns:
+                    df[col] = df[col].apply(safe_date_parse)
 
+        # Запис у Excel
         with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
-            # Зберігаємо всі аркуші
-            all_users_df.to_excel(writer, index=False, sheet_name="AllUsers")
-            users_df.to_excel(writer, index=False, sheet_name="ActiveUsers")
-            muted_df.to_excel(writer, index=False, sheet_name="MutedUsers")
-            banned_df.to_excel(writer, index=False, sheet_name="BannedUsers")
+            # Список аркушів
+            sheets = [
+                ("AllUsers", all_users_df),
+                ("ActiveUsers", users_df),
+                ("MutedUsers", muted_df),
+                ("BannedUsers", banned_df),
+                ("Topics", topics_df),
+                ("UserTopics", user_topics_df),
+                ("SentMessages", sent_messages_df),
+                ("Admins", pd.DataFrame(data.get("admins", []), columns=["Admins"])),
+                ("Programmers", pd.DataFrame(data.get("programmers", []), columns=["Programmers"])),
+                ("GeneralInfo", pd.DataFrame([{
+                    "bot_token": data.get("bot_token", ""),
+                    "owner_id": data.get("owner_id", ""),
+                    "chat_id": data.get("chat_id", ""),
+                    "cave_chat_id": data.get("cave_chat_id", "-1002648725095"),
+                    "allusers_tem_id": data.get("allusers_tem_id", 386),
+                    "total_score": data.get("total_score", 0),
+                    "num_of_ratings": data.get("num_of_ratings", 0)
+                }]))
+            ]
 
-            topics_df.to_excel(writer, index=False, sheet_name="Topics")
-            user_topics_df.to_excel(writer, index=False, sheet_name="UserTopics")
-            sent_messages_df.to_excel(writer, index=False, sheet_name="SentMessages")
+            for sheet_name, df in sheets:
+                df.to_excel(writer, index=False, sheet_name=sheet_name)
 
-            pd.DataFrame(data.get("admins", []), columns=["Admins"]).to_excel(
-                writer, index=False, sheet_name="Admins")
-            pd.DataFrame(data.get("programmers", []), columns=["Programmers"]).to_excel(
-                writer, index=False, sheet_name="Programmers")
-
-            # Загальний інформаційний аркуш
-            pd.DataFrame([{
-                "bot_token": data.get("bot_token", ""),
-                "owner_id": data.get("owner_id", ""),
-                "chat_id": data.get("chat_id", ""),
-                "cave_chat_id": data.get("cave_chat_id", "-1002648725095"),
-                "allusers_tem_id": data.get("allusers_tem_id", 386),
-                "total_score": data.get("total_score", 0),
-                "num_of_ratings": data.get("num_of_ratings", 0)
-            }]).to_excel(writer, index=False, sheet_name="GeneralInfo")
-
-            # Налаштування форматування та автопідбору ширини стовпців
+            # Отримуємо книгу для форматування
             workbook = writer.book
 
-            # Застосовуємо автопідбір ширини для всіх стовпців у всіх аркушах
+            # Визначаємо стилі
+            blue_fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')  # Програмісти
+            green_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')  # Адміни
+            orange_fill = PatternFill(start_color='FFA500', end_color='FFA500', fill_type='solid')  # Замучені
+            red_fill = PatternFill(start_color='FF6347', end_color='FF6347', fill_type='solid')  # Забанені
+
+            # Форматуємо аркуші
             for sheet_name in workbook.sheetnames:
-                ws = workbook[sheet_name]
+                sheet = workbook[sheet_name]
 
                 # Автопідбір ширини стовпців
-                for col in ws.columns:
-                    max_length = 0
-                    column = col[0].column_letter
+                for column in sheet.columns:
+                    max_length = max(len(str(cell.value)) for cell in column)
+                    adjusted_width = (max_length + 2) if max_length < 30 else 30
+                    sheet.column_dimensions[column[0].column_letter].width = adjusted_width
 
-                    for cell in col:
-                        try:
-                            value = str(cell.value) if cell.value is not None else ""
-                            if len(value) > max_length:
-                                max_length = len(value)
-                        except:
-                            pass
+                if sheet_name not in ["AllUsers", "ActiveUsers", "MutedUsers", "BannedUsers"]:
+                    continue
 
-                    adjusted_width = (max_length + 2)
-                    ws.column_dimensions[column].width = adjusted_width
+                max_row = sheet.max_row
+                max_col = sheet.max_column
 
-            return excel_filename
+                for row in sheet.iter_rows(min_row=2, max_row=max_row, max_col=max_col):
+                    if not row[0].value:
+                        continue
+
+                    user_id = str(row[0].value)
+
+                    # Визначаємо пріоритети заливки:
+                    # 1. Забанені (червоний)
+                    # 2. Програмісти (синій)
+                    # 3. Адміни (зелений)
+                    # 4. Замучені (помаранчевий)
+
+                    fill_color = None
+
+                    if sheet_name == "BannedUsers":
+                        fill_color = red_fill
+                    elif user_id in banned_ids and sheet_name in ["AllUsers", "MutedUsers"]:
+                        fill_color = red_fill
+                    elif user_id in programmer_ids:
+                        fill_color = blue_fill
+                    elif user_id in admin_ids:
+                        fill_color = green_fill
+                    elif sheet_name in ["AllUsers", "MutedUsers"] and str(row[4].value).lower() == "true":
+                        fill_color = orange_fill
+
+                    if fill_color:
+                        for cell in row:
+                            cell.fill = fill_color
+
+        return excel_filename
 
     except Exception as e:
-        logging.error(f"Помилка при експорті в Excel: {e}")
+        logging.error(f"Критична помилка при експорті: {str(e)}", exc_info=True)
         return None
 
 async def import_from_excel(file_path):
-    """Імпорт даних з Excel файлу з коректною обробкою sent_messages"""
+    """Импорт данных из Excel файла с корректной обработкой sent_messages"""
     try:
         data = safe_json_read(DATA_FILE)
         new_data = {
@@ -384,7 +411,7 @@ async def import_from_excel(file_path):
 
         wb = load_workbook(file_path)
 
-        # Читання GeneralInfo
+        # Чтение GeneralInfo
         if "GeneralInfo" in wb.sheetnames:
             ws = wb["GeneralInfo"]
             headers = [cell.value for cell in ws[1]] if len(ws[1]) > 0 else []
@@ -406,24 +433,23 @@ async def import_from_excel(file_path):
                     if len(headers) >= 7 and row[6] is not None:
                         new_data["num_of_ratings"] = int(row[6])
 
-        # Читання BannedUsers (з урахуванням шапки)
+        # Чтение BannedUsers (с учетом шапки)
         if "BannedUsers" in wb.sheetnames:
             ws = wb["BannedUsers"]
             headers = [cell.value for cell in ws[1]] if len(ws[1]) > 0 else []
 
-            # Пропускаємо шапку (перший рядок)
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                # Перевіряємо, чи це не шапка
-                if row and row[0] != "ID користувача" and len(row) >= 3 and len(headers) >= 3:
+            # Пропускаем шапку (первую строку)
+            for row in ws.iter_rows(min_row=3, values_only=True):
+                if len(row) >= 3 and len(headers) >= 3:
                     user_id = str(row[0])
-                    reason = row[headers.index("reason")] if "reason" in headers else "Імпортовано з файлу"
+                    reason = row[headers.index("reason")] if "reason" in headers else "Импортировано из файла"
 
                     new_data["banned_users"][user_id] = {
                         "reason": reason,
                         "date": get_current_time_kiev()
                     }
 
-        # Читання AllUsers
+        # Чтение AllUsers
         if "AllUsers" in wb.sheetnames:
             ws = wb["AllUsers"]
             headers = [cell.value for cell in ws[1]] if len(ws[1]) > 0 else []
@@ -437,45 +463,45 @@ async def import_from_excel(file_path):
 
                     if "mute/ban_end" in user_data:
                         user_data["mute_end"] = user_data.pop("mute/ban_end")
-                        if "Назавжди (бан)" in str(user_data["mute_end"]):
-                            user_data["mute_end"] = "Назавжди"
+                        if "Навсегда (бан)" in str(user_data["mute_end"]):
+                            user_data["mute_end"] = "Навсегда"
 
                     if user_data.get("mute", False) and user_data["id"] not in new_data["banned_users"]:
-                        reason = user_data.get("reason", "Причина не вказана")
+                        reason = user_data.get("reason", "Причина не указана")
                         new_data["muted_users"][user_data["id"]] = {
                             "expiration": user_data.get("mute_end"),
-                            "reason": reason if reason else "Причина не вказана"
+                            "reason": reason if reason else "Причина не указана"
                         }
 
                     new_data["users"].append(user_data)
 
-        # Читання Topics
+        # Чтение Topics
         if "Topics" in wb.sheetnames:
             ws = wb["Topics"]
             for row in ws.iter_rows(min_row=2, values_only=True):
                 if row and len(row) >= 2:
                     new_data["topics"][str(row[0])] = row[1]
 
-        # Читання UserTopics
+        # Чтение UserTopics
         if "UserTopics" in wb.sheetnames:
             ws = wb["UserTopics"]
             for row in ws.iter_rows(min_row=2, values_only=True):
                 if row and len(row) >= 2:
                     new_data["user_topics"][str(row[0])] = str(row[1])
 
-        # Читання SentMessages з перетворенням у рядковий формат
+        # Чтение SentMessages с преобразованием в строковый формат
         if "SentMessages" in wb.sheetnames:
             ws = wb["SentMessages"]
             for row in ws.iter_rows(min_row=2, values_only=True):
                 if row and len(row) >= 2:
                     new_data["sent_messages"][str(row[0])] = str(row[1])
 
-        # Читання Admins
+        # Чтение Admins
         if "Admins" in wb.sheetnames:
             ws = wb["Admins"]
             new_data["admins"] = [row[0] for row in ws.iter_rows(min_row=2, values_only=True) if row and row[0]]
 
-        # Читання Programmers
+        # Чтение Programmers
         if "Programmers" in wb.sheetnames:
             ws = wb["Programmers"]
             new_data["programmers"] = [row[0] for row in ws.iter_rows(min_row=2, values_only=True) if row and row[0]]
@@ -484,7 +510,7 @@ async def import_from_excel(file_path):
         return True
 
     except Exception as e:
-        print(f"Помилка при імпорті з Excel: {e}")
+        print(f"Ошибка при импорте из Excel: {e}")
         return False
 
 async def auto_delete_message(bot, chat_id, message_id, delay):
@@ -548,7 +574,7 @@ async def start(update: Update, context):
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
         await update.message.reply_text(
-            "👋2 Привіт! Я ваш бот підтримки. \n"
+            "👋5 Привіт! Я ваш бот підтримки. \n"
             "📝 Введіть команду /rate для оцінки бота, \n"
             "✉️ /message для написання адміністраторам \n"
             "❓ або /help для допомоги.",
@@ -1381,31 +1407,59 @@ async def alllist(update: Update, context: CallbackContext):
         print(f"Помилка в alllist: {e}")
         await update.message.reply_text("Сталася помилка при обробці команди.")
 
-async def get_alllist(update: Update, context: CallbackContext) -> None:
-    """Обробка команди /get_alllist - отримання Excel файлу з даними"""
-    try:
-        user = update.message.from_user.username
-        if not is_programmer(user) and not is_admin(user):
-            await update.message.reply_text("Ця команда доступна тільки адміністраторам.")
-            return
 
+async def get_alllist(update: Update, context: CallbackContext):
+    """Обробка команди /get_alllist з покращеною обробкою помилок"""
+    try:
+        # Відправляємо повідомлення про початок створення звіту
+        processing_msg = await update.message.reply_text("⏳ Створення звіту...")
+
+        # Створюємо звіт
         excel_filename = await export_to_excel()
+
         if excel_filename:
-            with open(excel_filename, "rb") as file:
-                filename_to_send = os.path.basename(excel_filename)
-                await update.message.reply_document(
-                    document=file,
-                    filename=filename_to_send
-                )
             try:
-                os.remove(excel_filename)
+                with open(excel_filename, "rb") as file:
+                    # Видаляємо повідомлення "Створення звіту..."
+                    await context.bot.delete_message(
+                        chat_id=update.effective_chat.id,
+                        message_id=processing_msg.message_id
+                    )
+                    # Відправляємо готовий звіт
+                    await update.message.reply_document(
+                        document=file,
+                        filename=os.path.basename(excel_filename),
+                        caption="📊 Звіт успішно створено"
+                    )
             except Exception as e:
-                print(f"Помилка при видаленні файлу: {e}")
+                logging.error(f"Помилка при відправці файлу: {str(e)}")
+                await context.bot.edit_message_text(
+                    chat_id=update.effective_chat.id,
+                    message_id=processing_msg.message_id,
+                    text="❌ Помилка при відправці звіту. Спробуйте ще раз."
+                )
+            finally:
+                # Видаляємо тимчасовий файл
+                if os.path.exists(excel_filename):
+                    try:
+                        os.remove(excel_filename)
+                    except Exception as e:
+                        logging.error(f"Помилка при видаленні файлу: {str(e)}")
         else:
-            await update.message.reply_text("Помилка при створенні Excel-файлу")
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=processing_msg.message_id,
+                text="❌ Не вдалося створити звіт. Спробуйте пізніше або зверніться до адміністратора."
+            )
+
     except Exception as e:
-        print(f"Помилка в get_alllist: {e}")
-        await update.message.reply_text("Сталася помилка при експорті даних")
+        logging.error(f"Помилка в get_alllist: {str(e)}", exc_info=True)
+        try:
+            await update.message.reply_text(
+                "⚠️ Сталася критична помилка. Будь ласка, спробуйте ще раз пізніше."
+            )
+        except:
+            pass
 
 async def set_alllist(update: Update, context: CallbackContext) -> None:
     """Обробка команди /set_alllist - імпорт даних з Excel файлу"""
@@ -2013,7 +2067,6 @@ async def main():
         print(f"Помилка в main: {e}")
 
 if __name__ == "__main__":
-    з
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
     asyncio.run(main())
