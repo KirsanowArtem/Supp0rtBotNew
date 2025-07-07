@@ -1,28 +1,40 @@
-import asyncio
-import re
-import os
-import nest_asyncio
-import pytz
-import threading
-import json
-import pandas as pd
-import telegram.error
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ChatPermissions, \
-    BotCommand, BotCommandScopeDefault, BotCommandScopeChat, Bot
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, CallbackContext, \
-    ContextTypes
-from datetime import datetime, timedelta
-from flask import Flask
-from openpyxl import load_workbook
-from openpyxl.styles import Alignment, Border, Side, PatternFill
-from apscheduler.schedulers.background import BackgroundScheduler
-import os
-from datetime import datetime
-import pandas as pd
-from openpyxl.styles import PatternFill
-from telegram import Update
-from telegram.ext import CallbackContext
+import asyncio          # Робота з асинхронним кодом
+from apscheduler.schedulers.asyncio import AsyncIOScheduler  # Планувальник асинхронних завдань
+from apscheduler.schedulers.background import BackgroundScheduler  # Фоновий планувальник
+import nest_asyncio     # Обхід обмежень вкладених асинхронних циклів
+
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ChatPermissions, BotCommand, BotCommandScopeDefault, BotCommandScopeChat, Bot  # Базові класи Telegram Bot API
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, CallbackContext, ContextTypes  # Розширення для бота (обробники подій)
+import telegram.error   # Обробка помилок Telegram
+
+import pandas as pd            # Обробка табличних даних
+from openpyxl import load_workbook  # Робота з Excel-файлами
+from openpyxl.styles import Alignment, Border, Side, PatternFill  # Стилізація Excel
+
+from datetime import datetime, timedelta  # Робота з датою та часом
+import pytz            # Часові зони
+
+import os              # Робота з файловою системою
+import threading       # Багатопотоковість
+import json            # Робота з JSON
+from aiohttp import web  # Асинхронний HTTP-сервер/клієнт
+
+import re              # Робота з регулярними виразами
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 nest_asyncio.apply()
 
@@ -189,21 +201,12 @@ def is_admin(username):
 # КОНСТАНТИ ТА НАЛАШТУВАННЯ
 DATA_FILE = "data.json"
 application = None
-app = Flask(__name__)
 CREATOR_CHAT_ID = load_chat_id_from_file()  # ID чату для адміністраторів
 ALLUSERS_TEM_ID=load_allusers_tem_id_from_file()
 CAVE_CHAT_ID= load_cave_chat_id_from_file()
 
 
 BOTTOCEN = load_bottocen_from_file()
-
-@app.route("/")
-def index():
-    return "@Supp0rtsBot2"
-
-def run_flask():
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
 
 # ФУНКЦІЇ ДЛЯ РОБОТИ З EXCEL
 async def export_to_excel():
@@ -1126,19 +1129,24 @@ async def check_mute_expirations():
             users_to_unmute = []
 
             for user in data["users"]:
-                if user["mute"] and user["mute_end"]:
+                if user.get("mute/ban") and user.get("mute/ban_end"):
                     try:
-                        mute_end = datetime.strptime(user["mute_end"], "%H:%M; %d/%m/%Y")
+                        # Пропускаємо вічний бан
+                        if user["mute/ban_end"] == "Назавжди (бан)":
+                            continue
+
+                        mute_end = datetime.strptime(user["mute/ban_end"], "%H:%M; %d/%m/%Y")
                         if mute_end <= now:
                             users_to_unmute.append(user)
                     except ValueError:
+                        print(f"Невірний формат дати у користувача {user.get('id')}: {user.get('mute/ban_end')}")
                         continue
 
             if users_to_unmute:
                 for user in users_to_unmute:
                     user.update({
-                        "mute": False,
-                        "mute_end": None,
+                        "mute/ban": False,
+                        "mute/ban_end": None,
                         "reason": None
                     })
 
@@ -1185,6 +1193,7 @@ async def check_mute_expirations():
 
     except Exception as e:
         print(f"Помилка в перевірці строків муту: {e}")
+
 
 async def admin(update: Update, context: CallbackContext):
     """Обробка команди /admin - додавання адміністратора"""
@@ -2043,8 +2052,28 @@ async def send_user_list():
             pass
 
 # ГОЛОВНА ФУНКЦІЯ
+
+async def handle_webhook(request):
+    """Обработчик входящих вебхуков от Telegram"""
+    global application
+    if application is None:
+        print("Application not initialized!")
+        return web.Response(status=500)
+    json_data = await request.json()
+    update = Update.de_json(json_data, application.bot)
+    await application.process_update(update)
+    return web.Response(text="OK")
+
+async def set_webhook():
+    """Устанавливает вебхук"""
+    await application.bot.set_webhook(
+        url="https://Sceleton.pythonanywhere.com/webhook",
+        secret_token="SECRET_KEY",  # Опционально (для безопасности)
+    )
+
 async def main():
     """Головна функція для запуску бота"""
+    global application
     try:
         application = Application.builder().token(BOTTOCEN).build()
 
@@ -2081,11 +2110,20 @@ async def main():
         scheduler.add_job(check_mute_expirations, "interval", minutes=1)
         scheduler.start()
 
-        application.run_polling()
+        await set_webhook()
+
+        app = web.Application()
+        app.router.add_post("/webhook", handle_webhook)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", 5000)
+        await site.start()
+
+        while True:
+            await asyncio.sleep(3600)
     except Exception as e:
         print(f"Помилка в main: {e}")
 
 if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.start()
+    print("Запуск бота")
     asyncio.run(main())

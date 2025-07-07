@@ -5,81 +5,82 @@
             "username": "ArtemKirss",
             "first_name": "Артем",
             "join_date": "10:47; 19/05/2025",
-            "rating": 0,
-            "mute": false,
-            "mute_end": null
+            "rating": 5,
+            "mute/ban": false,
+            "mute/ban_end": null,
+            "reason": null
         },
         {
             "id": "6222116355",
             "username": "modetoky0",
             "first_name": "tokyo",
             "join_date": "11:31; 19/05/2025",
-            "rating": 0,
-            "mute": true,
-            "mute_end": "21:39; 03/03/2659",
-            "reason": "За рішенням адміністрації"
+            "rating": 5,
+            "mute/ban": true,
+            "mute/ban_end": "10:03; 05/03/2659",
+            "reason": "так нужно"
         },
         {
             "id": "7409942168",
             "username": "Wusnexy",
             "first_name": "Yorik🥟",
             "join_date": "11:32; 19/05/2025",
-            "rating": 0,
-            "mute": false,
-            "mute_end": null
+            "rating": 5,
+            "mute/ban": false,
+            "mute/ban_end": null,
+            "reason": null
         },
         {
             "id": "698846573",
             "username": "Не вказано",
             "first_name": "San",
             "join_date": "11:36; 19/05/2025",
-            "rating": 0,
-            "mute": false,
-            "mute_end": null
+            "rating": 5,
+            "mute/ban": false,
+            "mute/ban_end": null,
+            "reason": null
         },
         {
             "id": "5708855619",
             "username": "Kirsanov_Dmitrij",
             "first_name": "Дмитрий",
             "join_date": "13:58; 19/05/2025",
-            "rating": 0,
-            "mute": true,
-            "mute_end": "Назавжди",
-            "reason": "Забанен: За рішенням адміністрації"
+            "rating": 5,
+            "mute/ban": true,
+            "mute/ban_end": "Назавжди (бан)",
+            "reason": null
         },
         {
             "id": "2133347662",
             "username": "DenProcUA",
             "first_name": "Денис",
             "join_date": "15:03; 19/05/2025",
-            "rating": 0,
-            "mute": false,
-            "mute_end": null
+            "rating": 5,
+            "mute/ban": false,
+            "mute/ban_end": null,
+            "reason": null
         },
         {
             "id": "1681126166",
             "username": "chellolik",
             "first_name": "𒌐BERSERK𒌐",
             "join_date": "15:27; 19/05/2025",
-            "rating": 0,
-            "mute": false,
-            "mute_end": null
+            "rating": 5,
+            "mute/ban": false,
+            "mute/ban_end": null,
+            "reason": null
         }
     ],
     "muted_users": {
-        "5708855619": {
-            "expiration": "Назавжди",
-            "reason": "Забанен: За рішенням адміністрації"
-        },
         "6222116355": {
-            "expiration": "21:39; 03/03/2659",
-            "reason": "За рішенням адміністрації"
+            "expiration": "10:03; 05/03/2659",
+            "reason": "так нужно"
         }
     },
     "banned_users": {
         "5708855619": {
             "reason": "За рішенням адміністрації",
-            "date": "22:20; 23/05/2025"
+            "date": "22:28; 25/05/2025"
         }
     },
     "admins": [
@@ -88,13 +89,13 @@
     "programmers": [
         "ArtemKirss"
     ],
-    "bot_token": "7651661492:AAGid0Ylm2tIMxeLC07Dm2ew6jR9DsoEGoY",
+    "bot_token": "7651661492:AAFQZTtYIuegJKw9-tFas2G_vZX7y5Sc_OI",
     "owner_id": "1840233118",
     "chat_id": "-1002558368408",
     "cave_chat_id": "-1002648725095",
     "allusers_tem_id": 386,
-    "total_score": 25.0,
-    "num_of_ratings": 5,
+    "total_score": 35.0,
+    "num_of_ratings": 7,
     "sent_messages": {
         "410": "1840233118",
         "420": "6222116355",
@@ -110,9 +111,14 @@
         "519": "698846573",
         "528": "1840233118",
         "533": "5708855619",
-        "557": 1840233118,
-        "558": 1840233118,
-        "559": 1840233118
+        "557": "1840233118",
+        "558": "1840233118",
+        "559": "1840233118",
+        "595": "1840233118",
+        "596": "1840233118",
+        "612": 2133347662,
+        "613": 2133347662,
+        "632": 2133347662
     },
     "topics": {
         "1840233118": 408,
